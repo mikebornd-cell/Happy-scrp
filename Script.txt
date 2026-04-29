@@ -1,0 +1,1 @@
+loadstring(game:HttpGet("https://raw.githubusercontent.com/mikebornd-cell/Happy-scrp/refs/heads/main/Heavyweight%20fishing%20Made%20by%20HAPPYY"))()
