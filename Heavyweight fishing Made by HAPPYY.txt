@@ -293,7 +293,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 task.spawn(function()
-    while task.wait(1.5) do
+    while task.wait(0.5) do
         if getgenv().HAPPYY_AutoCast and not isCasting and not castCooldown and not isFishing then
             isCasting = true
             pcall(function()
