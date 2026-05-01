@@ -22,7 +22,7 @@ getgenv().HAPPYY_SkillC = getgenv().HAPPYY_SkillC or false
 local teleportLocations = {
     {name = "Beginning Isle", x = -240.01, y = 5.56, z = 40.94},
     {name = "Bamboo Island", x = -1214.99, y = 5.76, z = -20.32},
-    {name = "Coconut Isle", x = 31.89, y = 6.20, z = 1227.51},
+    {name = "Fallout Isle", x = 31.89, y = 6.20, z = 1227.51},
     {name = "Sovereign Island", x = -1226.98, y = 5.25, z = 1240.85},
     {name = "Peach Island", x = -0.18, y = 5.90, z = -1301.34},
     {name = "Frost Island", x = -1351.54, y = 3.45, z = -1426.64},
