@@ -1,369 +1,99 @@
--- HAPPYY SCRIPT v10.0 - SPEED BUTTONS (NO SLIDER) + PLAYER ESP
+-- HAPPYY SCRIPT v11.0 - BOSS LOCK (Stops checking after boss detected)
 local DrRayLibrary = loadstring(game:HttpGet("https://raw.githubusercontent.com/AZYsGithub/DrRay-UI-Library/main/DrRay.lua"))()
 local window = DrRayLibrary:Load("HAPPYY SCRIPT", "Default")
 
 local lp = game:GetService("Players").LocalPlayer
-local RS = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
+local rs = game:GetService("ReplicatedStorage")
+local runService = game:GetService("RunService")
+local players = game:GetService("Players")
+local vim = game:GetService("VirtualInputManager")
 
--- Initialize variables
-getgenv().HAPPYY_Anchor = getgenv().HAPPYY_Anchor or false
-getgenv().HAPPYY_AutoCast = getgenv().HAPPYY_AutoCast or false
-getgenv().HAPPYY_Speed = getgenv().HAPPYY_Speed or 25
-getgenv().HAPPYY_PlayerESP = getgenv().HAPPYY_PlayerESP or false
-
--- Skill settings
-getgenv().HAPPYY_SkillZ = getgenv().HAPPYY_SkillZ or false
-getgenv().HAPPYY_SkillX = getgenv().HAPPYY_SkillX or false
-getgenv().HAPPYY_SkillV = getgenv().HAPPYY_SkillV or false
-getgenv().HAPPYY_SkillC = getgenv().HAPPYY_SkillC or false
-
--- ============ TELEPORT DATA ============
-local teleportLocations = {
-    {name = "Beginning Isle", x = -240.01, y = 5.56, z = 40.94},
-    {name = "Bamboo Island", x = -1214.99, y = 5.76, z = -20.32},
-    {name = "Fallout Isle", x = 31.89, y = 6.20, z = 1227.51},
-    {name = "Sovereign Island", x = -1226.98, y = 5.25, z = 1240.85},
-    {name = "Peach Island", x = -0.18, y = 5.90, z = -1301.34},
-    {name = "Frost Island", x = -1351.54, y = 3.45, z = -1426.64},
-    {name = "Coconut Island", x = 1533.78, y = 10.74, z = -1360.50},
-    {name = "Amber Island", x = 1407.23, y = 42.26, z = 1452.33},
-    {name = "Battlefield Island", x = 1479.92, y = 46.96, z = -66.00}
+-- Settings
+local settings = {
+    anchor = false,
+    autoCast = false,
+    autoBoss = false,
+    speed = 25,
+    esp = false,
+    skillZ = false,
+    skillX = false,
+    skillV = false,
+    skillC = false
 }
 
--- Teleport function
-local function teleportTo(location)
-    pcall(function()
-        local char = lp.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            char.HumanoidRootPart.CFrame = CFrame.new(location.x, location.y, location.z)
-        end
-    end)
+-- State
+local resetting = false
+local casting = false
+local castCD = false
+local bossDetected = false
+local bossLocked = false  -- NEW: Prevents further checks once boss is confirmed
+
+-- Find remotes
+local castRemote = nil
+local sellRemote = nil
+
+for _, name in ipairs({"Fishing", "Cast", "StartFishing"}) do
+    castRemote = rs:FindFirstChild(name) or (rs:FindFirstChild("Events") and rs.Events:FindFirstChild(name))
+    if castRemote then break end
 end
 
--- ============ RESPAWN FUNCTION ============
-local function respawnPlayer()
-    pcall(function()
-        local char = lp.Character
-        if char then
-            local humanoid = char:FindFirstChild("Humanoid")
-            if humanoid then
-                humanoid.Health = 0
-            end
-        end
-    end)
+for _, name in ipairs({"SellAll", "Sell", "SellFish"}) do
+    sellRemote = rs:FindFirstChild(name) or (rs:FindFirstChild("Events") and rs.Events:FindFirstChild(name))
+    if sellRemote then break end
 end
 
--- ============ SPEED BUTTONS (RELIABLE) ============
-local function setSpeed(speedValue)
-    speedValue = math.clamp(speedValue, 1, 100)
-    getgenv().HAPPYY_Speed = speedValue
-    
-    -- Multiple methods to apply speed
-    pcall(function()
+-- Teleports
+local teleports = {
+    {"Beginning Isle", -240.01, 5.56, 40.94},
+    {"Bamboo Island", -1214.99, 5.76, -20.32},
+    {"Perch Isle", 31.89, 6.20, 1227.51},
+    {"Sovereign Island", -1226.98, 5.25, 1240.85},
+    {"Peach Island", -0.18, 5.90, -1301.34},
+    {"Frost Island", -1351.54, 3.45, -1426.64},
+    {"Coconut Isle", 1533.78, 10.74, -1360.50},
+    {"Amber Island", 1407.23, 42.26, 1452.33},
+    {"Battlefield Island", 1479.92, 46.96, -66.00}
+}
+
+local function teleportTo(x, y, z)
+    local char = lp.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        char.HumanoidRootPart.CFrame = CFrame.new(x, y, z)
+    end
+end
+
+-- Speed
+local function setSpeed(v)
+    v = math.clamp(v, 1, 100)
+    settings.speed = v
+    local char = lp.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.WalkSpeed = v
+    end
+    print("Speed: " .. v)
+end
+
+lp.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    local hum = char:FindFirstChild("Humanoid")
+    if hum then hum.WalkSpeed = settings.speed end
+end)
+
+runService.RenderStepped:Connect(function()
+    if settings.speed ~= 25 then
         local char = lp.Character
         if char and char:FindFirstChild("Humanoid") then
-            char.Humanoid.WalkSpeed = speedValue
-        end
-    end)
-    
-    -- Look for speed values in character
-    pcall(function()
-        local char = lp.Character
-        if char then
-            for _, child in ipairs(char:GetChildren()) do
-                if child:IsA("NumberValue") and child.Name:lower():find("speed") then
-                    child.Value = speedValue
-                end
-            end
-        end
-    end)
-    
-    print("Speed set to: " .. speedValue)
-end
-
--- Aggressive speed keep (every frame)
-RunService.RenderStepped:Connect(function()
-    if getgenv().HAPPYY_Speed ~= 25 then
-        pcall(function()
-            local char = lp.Character
-            if char and char:FindFirstChild("Humanoid") then
-                if char.Humanoid.WalkSpeed ~= getgenv().HAPPYY_Speed then
-                    char.Humanoid.WalkSpeed = getgenv().HAPPYY_Speed
-                end
-            end
-        end)
-    end
-end)
-
--- Extra speed keep (every 0.2 seconds)
-task.spawn(function()
-    while task.wait(0.2) do
-        if getgenv().HAPPYY_Speed ~= 25 then
-            pcall(function()
-                local char = lp.Character
-                if char and char:FindFirstChild("Humanoid") then
-                    if char.Humanoid.WalkSpeed ~= getgenv().HAPPYY_Speed then
-                        char.Humanoid.WalkSpeed = getgenv().HAPPYY_Speed
-                    end
-                end
-            end)
-        end
-    end
-end)
-
--- Character respawn handler
-lp.CharacterAdded:Connect(function(char)
-    task.wait(0.3)
-    pcall(function()
-        local humanoid = char:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid.WalkSpeed = getgenv().HAPPYY_Speed
-        end
-    end)
-end)
-
--- ============ PLAYER ESP ============
-local espObjects = {}
-local espEnabled = false
-
-local function getDistance(player)
-    local char = lp.Character
-    local targetChar = player.Character
-    if char and targetChar then
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
-        if hrp and targetHrp then
-            local distance = (hrp.Position - targetHrp.Position).Magnitude
-            return math.floor(distance)
-        end
-    end
-    return nil
-end
-
-local function createPlayerESP(player)
-    if player == lp then return nil end
-    
-    local targetChar = player.Character
-    if not targetChar or not targetChar.Parent then return nil end
-    
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "PlayerESP_" .. player.Name
-    highlight.Adornee = targetChar
-    highlight.FillColor = Color3.fromRGB(255, 255, 255)
-    highlight.FillTransparency = 0.5
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.OutlineTransparency = 0.2
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Parent = targetChar
-    
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "PlayerLabel_" .. player.Name
-    billboard.AlwaysOnTop = true
-    billboard.Size = UDim2.new(0, 180, 0, 55)
-    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
-    billboard.Adornee = targetChar
-    billboard.Parent = targetChar
-    
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, 0, 1, 0)
-    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    frame.BackgroundTransparency = 0.6
-    frame.BorderSizePixel = 1
-    frame.BorderColor3 = Color3.fromRGB(255, 255, 255)
-    frame.Parent = billboard
-    
-    local nameLabel = Instance.new("TextLabel")
-    nameLabel.Size = UDim2.new(1, 0, 0.55, 0)
-    nameLabel.Position = UDim2.new(0, 0, 0, 0)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.Text = player.Name
-    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    nameLabel.TextScaled = true
-    nameLabel.Font = Enum.Font.GothamBold
-    nameLabel.Parent = frame
-    
-    local distanceLabel = Instance.new("TextLabel")
-    distanceLabel.Size = UDim2.new(1, 0, 0.45, 0)
-    distanceLabel.Position = UDim2.new(0, 0, 0.55, 0)
-    distanceLabel.BackgroundTransparency = 1
-    distanceLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
-    distanceLabel.TextScaled = true
-    distanceLabel.Font = Enum.Font.Gotham
-    distanceLabel.Parent = frame
-    
-    local connection
-    connection = RunService.RenderStepped:Connect(function()
-        if not espEnabled or not billboard or not billboard.Parent then
-            if connection then connection:Disconnect() end
-            return
-        end
-        
-        local dist = getDistance(player)
-        if dist then
-            distanceLabel.Text = dist .. " meters"
-        else
-            distanceLabel.Text = "out of range"
-        end
-    end)
-    
-    return {highlight = highlight, billboard = billboard, connection = connection, player = player}
-end
-
-local function clearPlayerESP()
-    for _, obj in pairs(espObjects) do
-        pcall(function()
-            if obj.highlight then obj.highlight:Destroy() end
-            if obj.billboard then obj.billboard:Destroy() end
-            if obj.connection then obj.connection:Disconnect() end
-        end)
-    end
-    espObjects = {}
-end
-
-local function refreshPlayerESP()
-    if not espEnabled then return end
-    
-    clearPlayerESP()
-    
-    for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
-        if player ~= lp and player.Character and player.Character.Parent then
-            local esp = createPlayerESP(player)
-            if esp then
-                table.insert(espObjects, esp)
-            end
-        end
-    end
-    
-    print("Player ESP refreshed - Tracking " .. #espObjects .. " players")
-end
-
-local function togglePlayerESP(state)
-    espEnabled = state
-    if espEnabled then
-        refreshPlayerESP()
-    else
-        clearPlayerESP()
-        print("Player ESP disabled")
-    end
-end
-
-game:GetService("Players").PlayerAdded:Connect(function(player)
-    if espEnabled then
-        task.wait(0.5)
-        if player.Character and player.Character.Parent then
-            local esp = createPlayerESP(player)
-            if esp then
-                table.insert(espObjects, esp)
+            local hum = char.Humanoid
+            if hum.WalkSpeed ~= settings.speed then
+                hum.WalkSpeed = settings.speed
             end
         end
     end
 end)
 
-game:GetService("Players").PlayerRemoving:Connect(function(player)
-    if espEnabled then
-        for i, obj in pairs(espObjects) do
-            if obj.player == player then
-                pcall(function()
-                    if obj.highlight then obj.highlight:Destroy() end
-                    if obj.billboard then obj.billboard:Destroy() end
-                    if obj.connection then obj.connection:Disconnect() end
-                end)
-                table.remove(espObjects, i)
-                break
-            end
-        end
-    end
-end)
-
--- ============ AUTO CAST ============
-local isFishing = false
-local isCasting = false
-local castCooldown = false
-
-RunService.RenderStepped:Connect(function()
-    pcall(function()
-        local char = lp.Character
-        if char and char:GetAttribute("Fishing") then
-            isFishing = true
-        else
-            isFishing = false
-        end
-    end)
-end)
-
-task.spawn(function()
-    while task.wait(1.5) do
-        if getgenv().HAPPYY_AutoCast and not isCasting and not castCooldown and not isFishing then
-            isCasting = true
-            pcall(function()
-                local Events = RS:FindFirstChild("Events") or RS
-                local FishingRemote = Events:FindFirstChild("Fishing") or Events:FindFirstChild("Cast")
-                if FishingRemote then
-                    FishingRemote:FireServer()
-                    castCooldown = true
-                    task.wait(2)
-                    castCooldown = false
-                end
-            end)
-            task.wait(1)
-            isCasting = false
-        end
-        task.wait()
-    end
-end)
-
--- ============ AUTO SKILLS ============
-task.spawn(function()
-    local lastUse = {Z=0, X=0, V=0, C=0}
-    while task.wait(0.3) do
-        local now = tick()
-        
-        if getgenv().HAPPYY_SkillZ and (now - lastUse.Z) >= 1.5 then
-            pcall(function()
-                local VirtualInput = game:GetService("VirtualInputManager")
-                VirtualInput:SendKeyEvent(true, Enum.KeyCode.Z, false, game)
-                task.wait(0.05)
-                VirtualInput:SendKeyEvent(false, Enum.KeyCode.Z, false, game)
-                lastUse.Z = now
-            end)
-        end
-        
-        if getgenv().HAPPYY_SkillX and (now - lastUse.X) >= 1.5 then
-            pcall(function()
-                local VirtualInput = game:GetService("VirtualInputManager")
-                VirtualInput:SendKeyEvent(true, Enum.KeyCode.X, false, game)
-                task.wait(0.05)
-                VirtualInput:SendKeyEvent(false, Enum.KeyCode.X, false, game)
-                lastUse.X = now
-            end)
-        end
-        
-        if getgenv().HAPPYY_SkillV and (now - lastUse.V) >= 1.5 then
-            pcall(function()
-                local VirtualInput = game:GetService("VirtualInputManager")
-                VirtualInput:SendKeyEvent(true, Enum.KeyCode.V, false, game)
-                task.wait(0.05)
-                VirtualInput:SendKeyEvent(false, Enum.KeyCode.V, false, game)
-                lastUse.V = now
-            end)
-        end
-        
-        if getgenv().HAPPYY_SkillC and (now - lastUse.C) >= 1.5 then
-            pcall(function()
-                local VirtualInput = game:GetService("VirtualInputManager")
-                VirtualInput:SendKeyEvent(true, Enum.KeyCode.C, false, game)
-                task.wait(0.05)
-                VirtualInput:SendKeyEvent(false, Enum.KeyCode.C, false, game)
-                lastUse.C = now
-            end)
-        end
-    end
-end)
-
--- ============ ANCHOR / AUTO REEL ============
-RunService.RenderStepped:Connect(function()
-    if getgenv().HAPPYY_Anchor then
+-- OLD ANCHOR
+runService.RenderStepped:Connect(function()
+    if settings.anchor then
         pcall(function()
             local fishingUI = lp.PlayerGui:FindFirstChild("MainGui")
             if fishingUI then
@@ -382,111 +112,299 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ============ SELL ALL ============
-local function sellAll()
+-- Reset rod (press 1 twice)
+local function resetRod()
     pcall(function()
-        local Events = RS:FindFirstChild("Events") or RS
-        local sellRemote = Events:FindFirstChild("SellAll") or Events:FindFirstChild("Sell")
-        if sellRemote then
-            sellRemote:FireServer()
-            print("Sold all items!")
+        print("[Auto Boss] Resetting rod...")
+        vim:SendKeyEvent(true, Enum.KeyCode.One, false, game)
+        task.wait(0.1)
+        vim:SendKeyEvent(false, Enum.KeyCode.One, false, game)
+        task.wait(0.2)
+        vim:SendKeyEvent(true, Enum.KeyCode.One, false, game)
+        task.wait(0.1)
+        vim:SendKeyEvent(false, Enum.KeyCode.One, false, game)
+    end)
+end
+
+-- GET COUNTDOWN NUMBER (only gets the FIRST number, ignores after boss detected)
+local function getCountdownNumber()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("TextLabel") then
+            local text = obj.Text or ""
+            -- Only match if it's specifically "boss fight" or "minigame" with a number
+            local bossNum = string.match(text, "boss fight will start in (%d+)")
+            if bossNum then
+                return tonumber(bossNum)
+            end
+            local minigameNum = string.match(text, "minigame will start in (%d+)")
+            if minigameNum then
+                return tonumber(minigameNum)
+            end
         end
-    end)
+    end
+    
+    local gui = lp.PlayerGui
+    if gui then
+        for _, obj in ipairs(gui:GetDescendants()) do
+            if obj:IsA("TextLabel") then
+                local text = obj.Text or ""
+                local bossNum = string.match(text, "boss fight will start in (%d+)")
+                if bossNum then
+                    return tonumber(bossNum)
+                end
+                local minigameNum = string.match(text, "minigame will start in (%d+)")
+                if minigameNum then
+                    return tonumber(minigameNum)
+                end
+            end
+        end
+    end
+    return nil
 end
 
--- ============ CREATE GUI ============
-
--- MAIN TAB
-local mainTab = DrRayLibrary.newTab("Main", "Default")
-mainTab.newToggle("Auto Cast", "Automatically casts fishing rod", false, function(state)
-    getgenv().HAPPYY_AutoCast = state
-end)
-mainTab.newToggle("Anchor/Auto Reel", "Automatically keeps bar in middle", false, function(state)
-    getgenv().HAPPYY_Anchor = state
-end)
-mainTab.newButton("Sell All", "Sells all items in inventory", function()
-    sellAll()
-end)
-
--- TELEPORT TAB
-local teleportTab = DrRayLibrary.newTab("Teleport", "Default")
-for _, location in ipairs(teleportLocations) do
-    teleportTab.newButton(location.name, "Teleport to " .. location.name, function()
-        teleportTo(location)
-    end)
+-- Get fishing UI
+local function getFishingUI()
+    local gui = lp.PlayerGui:FindFirstChild("MainGui")
+    if gui then
+        return gui:FindFirstChild("Fishing")
+    end
+    return nil
 end
 
--- SKILLS TAB
-local skillsTab = DrRayLibrary.newTab("Skills", "Default")
-skillsTab.newToggle("Auto Skill Z", "Automatically uses skill Z", false, function(state)
-    getgenv().HAPPYY_SkillZ = state
-end)
-skillsTab.newToggle("Auto Skill X", "Automatically uses skill X", false, function(state)
-    getgenv().HAPPYY_SkillX = state
-end)
-skillsTab.newToggle("Auto Skill V", "Automatically uses skill V", false, function(state)
-    getgenv().HAPPYY_SkillV = state
-end)
-skillsTab.newToggle("Auto Skill C", "Automatically uses skill C", false, function(state)
-    getgenv().HAPPYY_SkillC = state
-end)
-
--- SETTINGS TAB
-local settingsTab = DrRayLibrary.newTab("Settings", "Default")
-
-settingsTab.newToggle("Player ESP", "White highlight with real-time distance", false, function(state)
-    togglePlayerESP(state)
-    getgenv().HAPPYY_PlayerESP = state
-end)
-
-settingsTab.newButton("Refresh ESP", "Rescan and refresh player ESP", function()
-    if espEnabled then
-        refreshPlayerESP()
-        print("ESP refreshed")
-    else
-        print("Enable Player ESP first")
+-- AUTO BOSS LOOP (with boss locking)
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        
+        if not settings.autoBoss then
+            resetting = false
+            bossDetected = false
+            bossLocked = false
+        end
+        
+        local fishing = getFishingUI()
+        local uiVisible = fishing and fishing.Visible
+        
+        if uiVisible and settings.autoBoss and not resetting then
+            
+            -- ONLY check if boss is NOT already locked
+            if not bossLocked then
+                local countdownNum = getCountdownNumber()
+                
+                if countdownNum then
+                    -- BOSS DETECTED (10, 9, or 8)
+                    if countdownNum == 10 or countdownNum == 9 or countdownNum == 8 then
+                        bossDetected = true
+                        bossLocked = true  -- LOCK: No more checks for this fight
+                        print("[BOSS] 🎯 COUNTDOWN " .. countdownNum .. "s DETECTED!")
+                        print("[BOSS] LOCKED IN - No auto reset will happen")
+                        print("[BOSS] Make sure ANCHOR is ON to catch the boss!")
+                    end
+                    
+                    -- REGULAR FISH (3 or 2) - reset immediately
+                    if countdownNum == 3 or countdownNum == 2 then
+                        print("[Regular] COUNTDOWN " .. countdownNum .. "s DETECTED - Resetting rod...")
+                        resetting = true
+                        resetRod()
+                        task.wait(0.5)
+                        resetting = false
+                    end
+                end
+            end
+            
+        elseif not uiVisible then
+            -- UI closed - reset all states for next cast
+            bossDetected = false
+            bossLocked = false
+            resetting = false
+        end
     end
 end)
 
-settingsTab.newButton("Respawn [DO NOT PRESS]", "Warning: This will kill your character", function()
-    respawnPlayer()
-    print("Character respawned")
+-- Auto Cast
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        
+        if settings.autoBoss and castRemote then
+            local fishing = getFishingUI()
+            local char = lp.Character
+            local isFishing = char and char:GetAttribute("Fishing") == true
+            
+            if not isFishing and not casting and not castCD and not resetting and not (fishing and fishing.Visible) then
+                casting = true
+                pcall(function() castRemote:FireServer() end)
+                print("[Auto Boss] Casting rod...")
+                castCD = true
+                task.wait(2)
+                castCD = false
+                casting = false
+            end
+        elseif settings.autoCast and castRemote then
+            local char = lp.Character
+            local isFishing = char and char:GetAttribute("Fishing") == true
+            
+            if not isFishing and not casting and not castCD then
+                casting = true
+                pcall(function() castRemote:FireServer() end)
+                castCD = true
+                task.wait(2)
+                castCD = false
+                casting = false
+            end
+        end
+    end
 end)
 
--- SPEED BUTTONS (instead of slider)
-settingsTab.newButton("Speed 10", "Set walk speed to 10", function()
-    setSpeed(10)
+-- Auto Skills
+task.spawn(function()
+    local last = {Z = 0, X = 0, V = 0, C = 0}
+    while true do
+        task.wait(0.3)
+        local now = tick()
+        
+        if settings.skillZ and now - last.Z >= 1.5 then
+            vim:SendKeyEvent(true, Enum.KeyCode.Z, false, game)
+            task.wait(0.05)
+            vim:SendKeyEvent(false, Enum.KeyCode.Z, false, game)
+            last.Z = now
+        end
+        
+        if settings.skillX and now - last.X >= 1.5 then
+            vim:SendKeyEvent(true, Enum.KeyCode.X, false, game)
+            task.wait(0.05)
+            vim:SendKeyEvent(false, Enum.KeyCode.X, false, game)
+            last.X = now
+        end
+        
+        if settings.skillV and now - last.V >= 1.5 then
+            vim:SendKeyEvent(true, Enum.KeyCode.V, false, game)
+            task.wait(0.05)
+            vim:SendKeyEvent(false, Enum.KeyCode.V, false, game)
+            last.V = now
+        end
+        
+        if settings.skillC and now - last.C >= 1.5 then
+            vim:SendKeyEvent(true, Enum.KeyCode.C, false, game)
+            task.wait(0.05)
+            vim:SendKeyEvent(false, Enum.KeyCode.C, false, game)
+            last.C = now
+        end
+    end
 end)
 
-settingsTab.newButton("Speed 25", "Set walk speed to 25 (game default)", function()
-    setSpeed(25)
+-- ESP
+local espEnabled = false
+local espHighlights = {}
+
+local function toggleESP(state)
+    espEnabled = state
+    if not state then
+        for _, h in pairs(espHighlights) do
+            pcall(function() h:Destroy() end)
+        end
+        espHighlights = {}
+        return
+    end
+    
+    for _, player in ipairs(players:GetPlayers()) do
+        if player ~= lp and player.Character then
+            local h = Instance.new("Highlight")
+            h.Adornee = player.Character
+            h.FillColor = Color3.new(1, 1, 1)
+            h.FillTransparency = 0.5
+            h.OutlineColor = Color3.new(1, 0, 0)
+            h.Parent = player.Character
+            table.insert(espHighlights, h)
+        end
+    end
+end
+
+players.PlayerAdded:Connect(function(p)
+    if espEnabled and p ~= lp then
+        p.CharacterAdded:Connect(function(char)
+            task.wait(0.5)
+            local h = Instance.new("Highlight")
+            h.Adornee = char
+            h.FillColor = Color3.new(1, 1, 1)
+            h.FillTransparency = 0.5
+            h.OutlineColor = Color3.new(1, 0, 0)
+            h.Parent = char
+            table.insert(espHighlights, h)
+        end)
+    end
 end)
 
-settingsTab.newButton("Speed 30", "Set walk speed to 30", function()
-    setSpeed(30)
-end)
+-- Sell
+local function sellAll()
+    if sellRemote then
+        pcall(function() sellRemote:FireServer() end)
+        print("Sold all!")
+    else
+        print("Sell remote not found")
+    end
+end
 
-settingsTab.newButton("Speed 50", "Set walk speed to 50", function()
-    setSpeed(50)
-end)
+local function respawn()
+    local char = lp.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.Health = 0
+    end
+end
 
-settingsTab.newButton("Speed 80", "Set walk speed to 80", function()
-    setSpeed(80)
+-- GUI
+local main = DrRayLibrary.newTab("Main", "Default")
+main.newToggle("Auto Boss", "10/9/8s=BOSS (LOCKS & stops reset) | 3/2s=REGULAR (reset)", false, function(v)
+    settings.autoBoss = v
+    if v then
+        print("[Auto Boss] ON")
+        print("   🔒 Once boss detected, script LOCKS and stops checking")
+        print("   ⚠️  Turn ON Anchor to catch bosses!")
+    else
+        resetting = false
+        bossDetected = false
+        bossLocked = false
+    end
 end)
-
-settingsTab.newButton("Speed 100", "Set walk speed to 100 (max)", function()
-    setSpeed(100)
+main.newToggle("Anchor (Manual)", "OLD ANCHOR - Auto centers the bar (works on ALL fish)", false, function(v)
+    settings.anchor = v
+    print("Manual Anchor: " .. (v and "ON - Bar will auto-center" or "OFF"))
 end)
+main.newToggle("Auto Cast", "Auto cast rod", false, function(v) settings.autoCast = v end)
+main.newButton("Sell All", "Sell all fish", function() sellAll() end)
 
-settingsTab.newButton("Toggle UI", "Hide or show the GUI", function()
-    window:Toggle()
-end)
+local teleTab = DrRayLibrary.newTab("Teleport", "Default")
+for _, t in ipairs(teleports) do
+    teleTab.newButton(t[1], "Teleport to " .. t[1], function() teleportTo(t[2], t[3], t[4]) end)
+end
 
--- Set default speed to 25 on load
-task.wait(1)
+local skillTab = DrRayLibrary.newTab("Skills", "Default")
+skillTab.newToggle("Auto Z", "Auto skill Z", false, function(v) settings.skillZ = v end)
+skillTab.newToggle("Auto X", "Auto skill X", false, function(v) settings.skillX = v end)
+skillTab.newToggle("Auto V", "Auto skill V", false, function(v) settings.skillV = v end)
+skillTab.newToggle("Auto C", "Auto skill C", false, function(v) settings.skillC = v end)
+
+local settingTab = DrRayLibrary.newTab("Settings", "Default")
+settingTab.newToggle("Player ESP", "Highlight other players", false, function(v) toggleESP(v); settings.esp = v end)
+settingTab.newButton("Refresh ESP", "Refresh ESP", function() if espEnabled then toggleESP(false); task.wait(0.5); toggleESP(true) end end)
+settingTab.newButton("Respawn", "Kill character", function() respawn() end)
+settingTab.newButton("Speed 10", "", function() setSpeed(10) end)
+settingTab.newButton("Speed 25", "", function() setSpeed(25) end)
+settingTab.newButton("Speed 30", "", function() setSpeed(30) end)
+settingTab.newButton("Speed 50", "", function() setSpeed(50) end)
+settingTab.newButton("Speed 80", "", function() setSpeed(80) end)
+settingTab.newButton("Speed 100", "", function() setSpeed(100) end)
+settingTab.newButton("Toggle UI", "Hide/show GUI", function() window:Toggle() end)
+
 setSpeed(25)
-print("Default speed set to 25")
-
-print("HAPPYY SCRIPT v11.0 LOADED")
-print("Speed buttons added - Click any button to change speed")
-print("Speed options: 10, 25, 30, 50, 80, 100")
+print("========================================")
+print("HAPPYY v11.0 - BOSS LOCK")
+print("")
+print("🔒 When boss detected (10/9/8 sec):")
+print("   - Script LOCKS and stops all checks")
+print("   - No auto reset will happen")
+print("   - Let Anchor handle the fight")
+print("")
+print("🔄 When regular fish (3/2 sec):")
+print("   - Reset rod and try again")
+print("========================================")
