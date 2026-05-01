@@ -1,4 +1,4 @@
--- HAPPYY SCRIPT v11.0 - SPEED BUTTONS (NO SLIDER) + PLAYER ESP
+-- HAPPYY SCRIPT v10.0 - SPEED BUTTONS (NO SLIDER) + PLAYER ESP
 local DrRayLibrary = loadstring(game:HttpGet("https://raw.githubusercontent.com/AZYsGithub/DrRay-UI-Library/main/DrRay.lua"))()
 local window = DrRayLibrary:Load("HAPPYY SCRIPT", "Default")
 
