@@ -1,1 +1,1 @@
-loadstring(game:HttpGet("https://pastebin.com/raw/YTiFf41z"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/mikebornd-cell/Happy-scrp/refs/heads/main/scrp_lua.txt"))()
